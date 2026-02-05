@@ -1,8 +1,10 @@
 def:pub getMousePosition(e: dict, canvas: any, panOffset: dict, zoom: float) -> dict {
     rect = canvas.getBoundingClientRect();
+    screenX = e.clientX - rect.left;
+    screenY = e.clientY - rect.top;
     return {
-        "x": (e.clientX - rect.left - panOffset.x) / zoom,
-        "y": (e.clientY - rect.top - panOffset.y) / zoom
+        "x": (screenX - panOffset.x) / zoom,
+        "y": (screenY - panOffset.y) / zoom
     };
 }
 

@@ -7,7 +7,7 @@ def:pub useViewport() -> dict {
     [panOffset, setPanOffset] = useState({"x": 0, "y": 0});
     [isPanning, setIsPanning] = useState(False);
 
-    def handleZoom(deltaY: float) -> None {
+    def handleZoom(deltaY: float, mouseX: float, mouseY: float, canvas: any) -> None {
         zoomFactor = 1;
         if deltaY > 0 {
             zoomFactor = 0.9;
@@ -17,7 +17,18 @@ def:pub useViewport() -> dict {
 
         newZoom = zoom * zoomFactor;
         if newZoom >= canvasDefaults.minZoom and newZoom <= canvasDefaults.maxZoom {
+            rect = canvas.getBoundingClientRect();
+            canvasX = mouseX - rect.left;
+            canvasY = mouseY - rect.top;
+
+            worldX = (canvasX - panOffset.x) / zoom;
+            worldY = (canvasY - panOffset.y) / zoom;
+
+            newPanX = canvasX - worldX * newZoom;
+            newPanY = canvasY - worldY * newZoom;
+
             setZoom(newZoom);
+            setPanOffset({"x": newPanX, "y": newPanY});
         }
     }
 
@@ -41,6 +52,20 @@ def:pub useViewport() -> dict {
         setPanOffset({"x": 0, "y": 0});
     }
 
+    def screenToWorld(screenX: float, screenY: float) -> dict {
+        return {
+            "x": (screenX - panOffset.x) / zoom,
+            "y": (screenY - panOffset.y) / zoom
+        };
+    }
+
+    def worldToScreen(worldX: float, worldY: float) -> dict {
+        return {
+            "x": worldX * zoom + panOffset.x,
+            "y": worldY * zoom + panOffset.y
+        };
+    }
+
     return {
         "zoom": zoom,
         "panOffset": panOffset,
@@ -52,6 +77,8 @@ def:pub useViewport() -> dict {
         "handlePan": handlePan,
         "startPanning": startPanning,
         "stopPanning": stopPanning,
-        "resetViewport": resetViewport
+        "resetViewport": resetViewport,
+        "screenToWorld": screenToWorld,
+        "worldToScreen": worldToScreen
     };
 }

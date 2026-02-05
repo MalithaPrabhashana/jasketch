@@ -1,5 +1,5 @@
 import from react { useRef, useEffect, useState }
-import from "..services.canvas" { drawElement, clearCanvas }
+import from "..services.canvas" { drawElement, clearCanvas, drawInfiniteGrid, applyViewportTransform, drawSelectionBox, drawBoxSelectionRect }
 import from "..constants.canvas" { CANVAS_DEFAULTS }
 
 def:pub useCanvas() -> dict {
@@ -11,7 +11,7 @@ def:pub useCanvas() -> dict {
         "height": canvasDefaults.height
     });
 
-    def redrawCanvas(elements: list) -> None {
+    def redrawCanvas(elements: list, zoom: float, panOffset: dict, selectedElement: any = None, selectedElements: list = [], isBoxSelecting: bool = False, boxStart: any = None, boxEnd: any = None) -> None {
         canvas = canvasRef.current;
         if not canvas {
             return;
@@ -20,9 +20,30 @@ def:pub useCanvas() -> dict {
         ctx = canvas.getContext("2d");
         clearCanvas(ctx, canvas.width, canvas.height);
 
+        ctx.save();
+        applyViewportTransform(ctx, zoom, panOffset);
+
         elements.forEach(lambda element: any -> None {
             drawElement(ctx, element);
         });
+
+        if selectedElement and selectedElement.element {
+            drawSelectionBox(ctx, selectedElement.element);
+        }
+
+        if selectedElements and selectedElements.length > 0 {
+            selectedElements.forEach(lambda sel: dict -> None {
+                if sel.element {
+                    drawSelectionBox(ctx, sel.element);
+                }
+            });
+        }
+
+        if isBoxSelecting and boxStart and boxEnd {
+            drawBoxSelectionRect(ctx, boxStart, boxEnd);
+        }
+
+        ctx.restore();
     }
 
     def getContext() -> any {
@@ -35,9 +56,10 @@ def:pub useCanvas() -> dict {
 
     def initializeCanvas() -> None {
         if containerRef.current {
+            rect = containerRef.current.getBoundingClientRect();
             setCanvasSize({
-                "width": canvasDefaults.width,
-                "height": canvasDefaults.height
+                "width": rect.width,
+                "height": rect.height
             });
         }
     }

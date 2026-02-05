@@ -104,3 +104,168 @@ def:pub drawPreview(ctx: any, tool: str, startPoint: dict, currentPoint: dict, c
 def:pub clearCanvas(ctx: any, width: float, height: float) -> None {
     ctx.clearRect(0, 0, width, height);
 }
+
+def:pub drawInfiniteGrid(ctx: any, width: float, height: float, zoom: float, panOffset: dict) -> None {
+    ctx.save();
+
+    gridSize = 40;
+
+    if zoom < 0.25 {
+        ctx.restore();
+        return;
+    }
+
+    ctx.strokeStyle = "rgba(200, 200, 200, 0.3)";
+    ctx.lineWidth = 1;
+
+    startX = Math.floor((-panOffset.x) / (gridSize * zoom)) * gridSize;
+    startY = Math.floor((-panOffset.y) / (gridSize * zoom)) * gridSize;
+    endX = Math.ceil((width - panOffset.x) / (gridSize * zoom)) * gridSize;
+    endY = Math.ceil((height - panOffset.y) / (gridSize * zoom)) * gridSize;
+
+    ctx.beginPath();
+    x = startX;
+    while x <= endX {
+        screenX = x * zoom + panOffset.x;
+        if screenX >= 0 and screenX <= width {
+            ctx.moveTo(screenX, 0);
+            ctx.lineTo(screenX, height);
+        }
+        x = x + gridSize;
+    }
+
+    y = startY;
+    while y <= endY {
+        screenY = y * zoom + panOffset.y;
+        if screenY >= 0 and screenY <= height {
+            ctx.moveTo(0, screenY);
+            ctx.lineTo(width, screenY);
+        }
+        y = y + gridSize;
+    }
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(150, 150, 150, 0.5)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+
+    originScreenX = 0 * zoom + panOffset.x;
+    originScreenY = 0 * zoom + panOffset.y;
+
+    if originScreenX >= 0 and originScreenX <= width {
+        ctx.moveTo(originScreenX, 0);
+        ctx.lineTo(originScreenX, height);
+    }
+
+    if originScreenY >= 0 and originScreenY <= height {
+        ctx.moveTo(0, originScreenY);
+        ctx.lineTo(width, originScreenY);
+    }
+
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+def:pub applyViewportTransform(ctx: any, zoom: float, panOffset: dict) -> None {
+    ctx.translate(panOffset.x, panOffset.y);
+    ctx.scale(zoom, zoom);
+}
+
+def:pub drawBoxSelectionRect(ctx: any, boxStart: dict, boxEnd: dict) -> None {
+    ctx.save();
+    ctx.strokeStyle = "#6366f1";
+    ctx.fillStyle = "rgba(99, 102, 241, 0.1)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+
+    x = Math.min(boxStart.x, boxEnd.x);
+    y = Math.min(boxStart.y, boxEnd.y);
+    width = Math.abs(boxEnd.x - boxStart.x);
+    height = Math.abs(boxEnd.y - boxStart.y);
+
+    ctx.fillRect(x, y, width, height);
+    ctx.strokeRect(x, y, width, height);
+
+    ctx.setLineDash([]);
+    ctx.restore();
+}
+
+def:pub drawSelectionBox(ctx: any, element: dict) -> None {
+    ctx.save();
+    ctx.strokeStyle = "#6366f1";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+
+    padding = 5;
+
+    if element.type == "text" {
+        ctx.font = element.fontSize + "px " + element.fontFamily;
+        metrics = ctx.measureText(element.text);
+        lines = element.text.split("\n");
+        textHeight = lines.length * element.fontSize * 1.2;
+        ctx.strokeRect(
+            element.x - padding,
+            element.y - padding,
+            metrics.width + padding * 2,
+            textHeight + padding * 2
+        );
+    } elif element.type == "rectangle" {
+        ctx.strokeRect(
+            element.x - padding,
+            element.y - padding,
+            element.width + padding * 2,
+            element.height + padding * 2
+        );
+    } elif element.type == "circle" {
+        ctx.strokeRect(
+            element.x - padding,
+            element.y - padding,
+            element.width + padding * 2,
+            element.height + padding * 2
+        );
+    } elif element.type == "line" {
+        minX = Math.min(element.x1, element.x2);
+        minY = Math.min(element.y1, element.y2);
+        maxX = Math.max(element.x1, element.x2);
+        maxY = Math.max(element.y1, element.y2);
+        ctx.strokeRect(
+            minX - padding,
+            minY - padding,
+            (maxX - minX) + padding * 2,
+            (maxY - minY) + padding * 2
+        );
+    } elif element.type == "freehand" {
+        if element.points.length > 0 {
+            minX = element.points[0].x;
+            minY = element.points[0].y;
+            maxX = element.points[0].x;
+            maxY = element.points[0].y;
+
+            element.points.forEach(lambda point: dict -> None {
+                if point.x < minX {
+                    minX = point.x;
+                }
+                if point.y < minY {
+                    minY = point.y;
+                }
+                if point.x > maxX {
+                    maxX = point.x;
+                }
+                if point.y > maxY {
+                    maxY = point.y;
+                }
+            });
+
+            ctx.strokeRect(
+                minX - padding,
+                minY - padding,
+                (maxX - minX) + padding * 2,
+                (maxY - minY) + padding * 2
+            );
+        }
+    }
+
+    ctx.setLineDash([]);
+    ctx.restore();
+}

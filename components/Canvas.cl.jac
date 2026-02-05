@@ -28,14 +28,48 @@ def:pub Canvas(props: dict) -> any {
     containerRef = canvasHook.containerRef;
     textInputRef = useRef(None);
 
-    can with [elementsHook.elements, canvasHook.canvasSize] entry {
+    can with [elementsHook.elements, canvasHook.canvasSize, viewportHook.zoom, viewportHook.panOffset, selectionHook.selectedElement, selectionHook.selectedElements, selectionHook.isBoxSelecting, selectionHook.boxStart, selectionHook.boxEnd] entry {
         canvas = canvasRef.current;
         if canvas {
             canvas.width = canvasHook.canvasSize.width;
             canvas.height = canvasHook.canvasSize.height;
-            canvasHook.redrawCanvas(elementsHook.elements);
+            canvasHook.redrawCanvas(elementsHook.elements, viewportHook.zoom, viewportHook.panOffset, selectionHook.selectedElement, selectionHook.selectedElements, selectionHook.isBoxSelecting, selectionHook.boxStart, selectionHook.boxEnd);
         }
     }
+
+    useEffect(lambda -> any {
+        def handleKeyDown(e: dict) -> None {
+            if not textInputHook.textInput and (e.key == "Delete" or e.key == "Backspace") {
+                if selectionHook.selectedElement {
+                    elementsHook.removeElement(selectionHook.selectedElement.index);
+                    selectionHook.clearSelection();
+                    e.preventDefault();
+                }
+            }
+        }
+
+        window.addEventListener("keydown", handleKeyDown);
+        return lambda -> None {
+            window.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [selectionHook.selectedElement, textInputHook.textInput]);
+
+    useEffect(lambda -> any {
+        canvas = canvasRef.current;
+        if not canvas {
+            return None;
+        }
+
+        def handleWheel(e: dict) -> None {
+            e.preventDefault();
+            viewportHook.handleZoom(e.deltaY, e.clientX, e.clientY, canvas);
+        }
+
+        canvas.addEventListener("wheel", handleWheel, {"passive": False});
+        return lambda -> None {
+            canvas.removeEventListener("wheel", handleWheel);
+        };
+    }, [viewportHook.zoom, viewportHook.panOffset]);
 
     def handleCanvasClick(e: dict) -> None {
         if currentTool == "text" {
@@ -46,6 +80,27 @@ def:pub Canvas(props: dict) -> any {
                     textInputRef.current.focus();
                 }
             }, 10);
+        }
+    }
+
+    def handleCanvasDoubleClick(e: dict) -> None {
+        if currentTool == "select" {
+            pos = getMousePosition(e, canvasRef.current, viewportHook.panOffset, viewportHook.zoom);
+            elementInfo = selectionHook.findElementAtPoint(pos, elementsHook.elements);
+
+            if elementInfo and elementInfo.element.type == "text" {
+                element = elementInfo.element;
+                textInputHook.startTextInput(element.x, element.y, element.text);
+                elementsHook.removeElement(elementInfo.index);
+                selectionHook.clearSelection();
+
+                setTimeout(lambda -> None {
+                    if textInputRef.current {
+                        textInputRef.current.focus();
+                        textInputRef.current.select();
+                    }
+                }, 10);
+            }
         }
     }
 
@@ -83,7 +138,7 @@ def:pub Canvas(props: dict) -> any {
                 selectionHook.startDragging(elementInfo, pos);
             } else {
                 selectionHook.clearSelection();
-                viewportHook.startPanning();
+                selectionHook.startBoxSelection(pos);
             }
             return;
         }
@@ -102,6 +157,11 @@ def:pub Canvas(props: dict) -> any {
 
     def handleMouseMove(e: dict) -> None {
         pos = getMousePosition(e, canvasRef.current, viewportHook.panOffset, viewportHook.zoom);
+
+        if selectionHook.isBoxSelecting and currentTool == "select" {
+            selectionHook.updateBoxSelection(pos);
+            return;
+        }
 
         if selectionHook.isDragging and selectionHook.selectedElement and currentTool == "select" {
             element = selectionHook.selectedElement.element;
@@ -144,7 +204,11 @@ def:pub Canvas(props: dict) -> any {
 
             canvas = canvasRef.current;
             ctx = canvas.getContext("2d");
-            canvasHook.redrawCanvas(elementsHook.elements);
+            canvasHook.redrawCanvas(elementsHook.elements, viewportHook.zoom, viewportHook.panOffset, selectionHook.selectedElement, selectionHook.selectedElements, selectionHook.isBoxSelecting, selectionHook.boxStart, selectionHook.boxEnd);
+
+            ctx.save();
+            ctx.translate(viewportHook.panOffset.x, viewportHook.panOffset.y);
+            ctx.scale(viewportHook.zoom, viewportHook.zoom);
 
             ctx.strokeStyle = currentColor;
             ctx.lineWidth = currentStrokeWidth;
@@ -158,15 +222,27 @@ def:pub Canvas(props: dict) -> any {
                 ctx.lineTo(pos.x, pos.y);
                 ctx.stroke();
             }
+
+            ctx.restore();
         } else {
             canvas = canvasRef.current;
             ctx = canvas.getContext("2d");
-            canvasHook.redrawCanvas(elementsHook.elements);
+            canvasHook.redrawCanvas(elementsHook.elements, viewportHook.zoom, viewportHook.panOffset, selectionHook.selectedElement, selectionHook.selectedElements, selectionHook.isBoxSelecting, selectionHook.boxStart, selectionHook.boxEnd);
+
+            ctx.save();
+            ctx.translate(viewportHook.panOffset.x, viewportHook.panOffset.y);
+            ctx.scale(viewportHook.zoom, viewportHook.zoom);
             drawPreview(ctx, currentTool, drawingState.startPoint, pos, currentColor, currentStrokeWidth);
+            ctx.restore();
         }
     }
 
     def handleMouseUp(e: dict) -> None {
+        if selectionHook.isBoxSelecting and currentTool == "select" {
+            selectionHook.finishBoxSelection(elementsHook.elements);
+            return;
+        }
+
         selectionHook.stopDragging();
         viewportHook.stopPanning();
 
@@ -238,11 +314,6 @@ def:pub Canvas(props: dict) -> any {
         viewportHook.stopPanning();
     }
 
-    def handleWheel(e: dict) -> None {
-        e.preventDefault();
-        viewportHook.handleZoom(e.deltaY);
-    }
-
     cursorClass = "cursor-crosshair";
     if currentTool == "text" {
         cursorClass = "cursor-text";
@@ -256,14 +327,12 @@ def:pub Canvas(props: dict) -> any {
                 canvasRef={canvasRef}
                 canvasSize={canvasHook.canvasSize}
                 cursorClass={cursorClass}
-                zoom={viewportHook.zoom}
-                panOffset={viewportHook.panOffset}
                 onClick={handleCanvasClick}
+                onDoubleClick={handleCanvasDoubleClick}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseLeave}
-                onWheel={handleWheel}
             />
 
             <TextInput
