@@ -133,6 +133,12 @@ def:pub Canvas(props: dict) -> any {
         pos = getMousePosition(e, canvasRef.current, viewportHook.panOffset, viewportHook.zoom);
 
         if currentTool == "select" {
+            if e.button == 1 or e.button == 2 or e.metaKey or e.ctrlKey {
+                viewportHook.startPanning();
+                e.preventDefault();
+                return;
+            }
+
             elementInfo = selectionHook.findElementAtPoint(pos, elementsHook.elements);
             if elementInfo {
                 selectionHook.startDragging(elementInfo, pos);
@@ -157,6 +163,11 @@ def:pub Canvas(props: dict) -> any {
 
     def handleMouseMove(e: dict) -> None {
         pos = getMousePosition(e, canvasRef.current, viewportHook.panOffset, viewportHook.zoom);
+
+        if viewportHook.isPanning {
+            viewportHook.handlePan(e.movementX, e.movementY);
+            return;
+        }
 
         if selectionHook.isBoxSelecting and currentTool == "select" {
             selectionHook.updateBoxSelection(pos);
@@ -186,11 +197,6 @@ def:pub Canvas(props: dict) -> any {
             }
 
             elementsHook.updateElement(selectionHook.selectedElement.index, newElement);
-            return;
-        }
-
-        if viewportHook.isPanning and currentTool == "select" {
-            viewportHook.handlePan(e.movementX, e.movementY);
             return;
         }
 

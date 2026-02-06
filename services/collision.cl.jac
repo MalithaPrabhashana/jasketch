@@ -1,4 +1,4 @@
-import from .geometry { calculateDistance, calculateCircleRadius, getTextDimensions, distanceFromPointToLine }
+import from .geometry { calculateDistance, calculateCircleRadius, getTextDimensions }
 
 def:pub isPointInRectangle(point: dict, rect: dict) -> bool {
     return (
@@ -17,9 +17,21 @@ def:pub isPointInCircle(point: dict, circle: dict) -> bool {
     return distance <= radius;
 }
 
-def:pub isPointNearLine(point: dict, line: dict, tolerance: float = 5.0) -> bool {
-    distance = distanceFromPointToLine(point, line);
-    return distance <= tolerance;
+def:pub isPointNearLine(point: dict, line: dict, tolerance: float) -> bool {
+    dist1 = calculateDistance(point, {"x": line.x1, "y": line.y1});
+    dist2 = calculateDistance(point, {"x": line.x2, "y": line.y2});
+
+    if dist1 <= tolerance or dist2 <= tolerance {
+        return True;
+    }
+
+    lineLength = calculateDistance({"x": line.x1, "y": line.y1}, {"x": line.x2, "y": line.y2});
+
+    if Math.abs(dist1 + dist2 - lineLength) <= tolerance * 2 {
+        return True;
+    }
+
+    return False;
 }
 
 def:pub isPointInText(point: dict, textElement: dict) -> bool {
@@ -32,12 +44,45 @@ def:pub isPointInText(point: dict, textElement: dict) -> bool {
     );
 }
 
-def:pub isPointInFreehandPath(point: dict, path: list, tolerance: float = 10.0) -> bool {
-    for pathPoint in path {
+def:pub isPointInFreehandPath(point: dict, path: list, tolerance: float) -> bool {
+    if path.length == 0 {
+        return False;
+    }
+
+    minX = path[0].x;
+    minY = path[0].y;
+    maxX = path[0].x;
+    maxY = path[0].y;
+
+    i = 1;
+    while i < path.length {
+        if path[i].x < minX {
+            minX = path[i].x;
+        }
+        if path[i].x > maxX {
+            maxX = path[i].x;
+        }
+        if path[i].y < minY {
+            minY = path[i].y;
+        }
+        if path[i].y > maxY {
+            maxY = path[i].y;
+        }
+        i = i + 1;
+    }
+
+    if point.x < minX - tolerance or point.x > maxX + tolerance or point.y < minY - tolerance or point.y > maxY + tolerance {
+        return False;
+    }
+
+    i = 0;
+    while i < path.length {
+        pathPoint = path[i];
         distance = calculateDistance(point, pathPoint);
         if distance <= tolerance {
             return True;
         }
+        i = i + 1;
     }
     return False;
 }
@@ -50,9 +95,9 @@ def:pub isPointInElement(point: dict, element: dict) -> bool {
     } elif element.type == "circle" {
         return isPointInCircle(point, element);
     } elif element.type == "line" {
-        return isPointNearLine(point, element);
+        return isPointNearLine(point, element, 20.0);
     } elif element.type == "freehand" {
-        return isPointInFreehandPath(point, element.points);
+        return isPointInFreehandPath(point, element.points, 15.0);
     }
     return False;
 }

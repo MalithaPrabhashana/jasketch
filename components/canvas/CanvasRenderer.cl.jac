@@ -31,5 +31,8 @@ def:pub CanvasRenderer(props: dict) -> any {
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseLeave}
+        onContextMenu={lambda e: any -> None {
+            e.preventDefault();
+        }}
     />;
 }

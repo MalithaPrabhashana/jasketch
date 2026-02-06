@@ -26,8 +26,23 @@ def:pub useSelection() -> dict {
         setIsDragging(True);
 
         element = elementInfo.element;
-        offsetX = mousePos.x - (element.x or element.x1 or element.points[0].x);
-        offsetY = mousePos.y - (element.y or element.y1 or element.points[0].y);
+
+        elementX = 0;
+        elementY = 0;
+
+        if element.type == "freehand" and element.points and element.points.length > 0 {
+            elementX = element.points[0].x;
+            elementY = element.points[0].y;
+        } elif element.type == "line" {
+            elementX = element.x1;
+            elementY = element.y1;
+        } else {
+            elementX = element.x;
+            elementY = element.y;
+        }
+
+        offsetX = mousePos.x - elementX;
+        offsetY = mousePos.y - elementY;
 
         setDragOffset({"x": offsetX, "y": offsetY});
     }
