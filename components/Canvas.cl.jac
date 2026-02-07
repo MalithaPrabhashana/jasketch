@@ -141,7 +141,23 @@ def:pub Canvas(props: dict) -> any {
 
             elementInfo = selectionHook.findElementAtPoint(pos, elementsHook.elements);
             if elementInfo {
-                selectionHook.startDragging(elementInfo, pos);
+                isInSelection = False;
+                if selectionHook.selectedElements.length > 0 {
+                    i = 0;
+                    while i < selectionHook.selectedElements.length {
+                        if selectionHook.selectedElements[i].index == elementInfo.index {
+                            isInSelection = True;
+                        }
+                        i = i + 1;
+                    }
+                }
+
+                if isInSelection {
+                    selectionHook.setIsDragging(True);
+                    selectionHook.setDragStartPos(pos);
+                } else {
+                    selectionHook.startDragging(elementInfo, pos);
+                }
             } else {
                 selectionHook.clearSelection();
                 selectionHook.startBoxSelection(pos);
@@ -174,30 +190,62 @@ def:pub Canvas(props: dict) -> any {
             return;
         }
 
-        if selectionHook.isDragging and selectionHook.selectedElement and currentTool == "select" {
-            element = selectionHook.selectedElement.element;
-            newElement = Object.assign({}, element);
+        if selectionHook.isDragging and currentTool == "select" {
+            if selectionHook.selectedElements.length > 1 and selectionHook.dragStartPos {
+                deltaX = pos.x - selectionHook.dragStartPos.x;
+                deltaY = pos.y - selectionHook.dragStartPos.y;
 
-            if element.type == "text" or element.type == "rectangle" or element.type == "circle" {
-                newElement.x = pos.x - selectionHook.dragOffset.x;
-                newElement.y = pos.y - selectionHook.dragOffset.y;
-            } elif element.type == "line" {
-                deltaX = pos.x - selectionHook.dragOffset.x - element.x1;
-                deltaY = pos.y - selectionHook.dragOffset.y - element.y1;
-                newElement.x1 = element.x1 + deltaX;
-                newElement.y1 = element.y1 + deltaY;
-                newElement.x2 = element.x2 + deltaX;
-                newElement.y2 = element.y2 + deltaY;
-            } elif element.type == "freehand" {
-                deltaX = pos.x - selectionHook.dragOffset.x - element.points[0].x;
-                deltaY = pos.y - selectionHook.dragOffset.y - element.points[0].y;
-                newElement.points = element.points.map(lambda point: dict -> dict {
-                    return {"x": point.x + deltaX, "y": point.y + deltaY};
-                });
+                updates = [];
+                i = 0;
+                while i < selectionHook.selectedElements.length {
+                    selectedInfo = selectionHook.selectedElements[i];
+                    originalElement = selectedInfo.element;
+                    newElement = Object.assign({}, originalElement);
+
+                    if originalElement.type == "text" or originalElement.type == "rectangle" or originalElement.type == "circle" {
+                        newElement.x = originalElement.x + deltaX;
+                        newElement.y = originalElement.y + deltaY;
+                    } elif originalElement.type == "line" {
+                        newElement.x1 = originalElement.x1 + deltaX;
+                        newElement.y1 = originalElement.y1 + deltaY;
+                        newElement.x2 = originalElement.x2 + deltaX;
+                        newElement.y2 = originalElement.y2 + deltaY;
+                    } elif originalElement.type == "freehand" {
+                        newElement.points = originalElement.points.map(lambda point: dict -> dict {
+                            return {"x": point.x + deltaX, "y": point.y + deltaY};
+                        });
+                    }
+
+                    updates.push({"index": selectedInfo.index, "element": newElement});
+                    i = i + 1;
+                }
+                elementsHook.updateMultipleElements(updates);
+                return;
+            } elif selectionHook.selectedElement {
+                element = selectionHook.selectedElement.element;
+                newElement = Object.assign({}, element);
+
+                if element.type == "text" or element.type == "rectangle" or element.type == "circle" {
+                    newElement.x = pos.x - selectionHook.dragOffset.x;
+                    newElement.y = pos.y - selectionHook.dragOffset.y;
+                } elif element.type == "line" {
+                    deltaX = pos.x - selectionHook.dragOffset.x - element.x1;
+                    deltaY = pos.y - selectionHook.dragOffset.y - element.y1;
+                    newElement.x1 = element.x1 + deltaX;
+                    newElement.y1 = element.y1 + deltaY;
+                    newElement.x2 = element.x2 + deltaX;
+                    newElement.y2 = element.y2 + deltaY;
+                } elif element.type == "freehand" {
+                    deltaX = pos.x - selectionHook.dragOffset.x - element.points[0].x;
+                    deltaY = pos.y - selectionHook.dragOffset.y - element.points[0].y;
+                    newElement.points = element.points.map(lambda point: dict -> dict {
+                        return {"x": point.x + deltaX, "y": point.y + deltaY};
+                    });
+                }
+
+                elementsHook.updateElement(selectionHook.selectedElement.index, newElement);
+                return;
             }
-
-            elementsHook.updateElement(selectionHook.selectedElement.index, newElement);
-            return;
         }
 
         if not drawingState.isDrawing {

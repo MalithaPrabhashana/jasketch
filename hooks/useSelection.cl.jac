@@ -6,6 +6,7 @@ def:pub useSelection() -> dict {
     [selectedElements, setSelectedElements] = useState([]);
     [isDragging, setIsDragging] = useState(False);
     [dragOffset, setDragOffset] = useState({"x": 0, "y": 0});
+    [dragStartPos, setDragStartPos] = useState(None);
     [isBoxSelecting, setIsBoxSelecting] = useState(False);
     [boxStart, setBoxStart] = useState(None);
     [boxEnd, setBoxEnd] = useState(None);
@@ -24,6 +25,7 @@ def:pub useSelection() -> dict {
     def startDragging(elementInfo: dict, mousePos: dict) -> None {
         setSelectedElement(elementInfo);
         setIsDragging(True);
+        setDragStartPos(mousePos);
 
         element = elementInfo.element;
 
@@ -127,12 +129,14 @@ def:pub useSelection() -> dict {
         "selectedElements": selectedElements,
         "isDragging": isDragging,
         "dragOffset": dragOffset,
+        "dragStartPos": dragStartPos,
         "isBoxSelecting": isBoxSelecting,
         "boxStart": boxStart,
         "boxEnd": boxEnd,
         "setSelectedElement": setSelectedElement,
         "setSelectedElements": setSelectedElements,
         "setIsDragging": setIsDragging,
+        "setDragStartPos": setDragStartPos,
         "findElementAtPoint": findElementAtPoint,
         "startDragging": startDragging,
         "stopDragging": stopDragging,
