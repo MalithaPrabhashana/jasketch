@@ -1,5 +1,5 @@
 import from react { useRef, useEffect, useState }
-import from "..services.canvas" { drawElement, clearCanvas, drawInfiniteGrid, applyViewportTransform, drawSelectionBox, drawBoxSelectionRect }
+import from "..services.canvas" { drawElement, clearCanvas, applyViewportTransform, drawSelectionBox, drawBoxSelectionRect }
 import from "..constants.canvas" { CANVAS_DEFAULTS }
 
 def:pub useCanvas() -> dict {

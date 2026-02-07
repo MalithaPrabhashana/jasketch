@@ -28,17 +28,3 @@ def:pub getTextDimensions(text: str, fontSize: float) -> dict {
     };
 }
 
-def:pub distanceFromPointToLine(point: dict, line: dict) -> float {
-    dx = line.x2 - line.x1;
-    dy = line.y2 - line.y1;
-
-    lineLength = Math.sqrt(Math.pow(dx, 2) + Math.pow(dy, 2));
-
-    if lineLength == 0 {
-        return calculateDistance(point, {"x": line.x1, "y": line.y1});
-    }
-
-    numerator = Math.abs(dy * point.x - dx * point.y + line.x2 * line.y1 - line.y2 * line.x1);
-
-    return numerator / lineLength;
-}

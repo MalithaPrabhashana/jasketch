@@ -1,14 +1,14 @@
 def:pub PRESET_COLORS() -> list {
     return [
-        "#000000",  # Black
-        "#ffffff",  # White
-        "#ef4444",  # Red
-        "#f97316",  # Orange
-        "#eab308",  # Yellow
-        "#22c55e",  # Green
-        "#3b82f6",  # Blue
-        "#8b5cf6",  # Purple
-        "#ec4899",  # Pink
-        "#6b7280"   # Gray
+        "#1e1e1e",
+        "#e03131",
+        "#2f9e44",
+        "#1971c2",
+        "#f08c00",
+        "#9c36b5",
+        "#0c8599",
+        "#e8590c",
+        "#f783ac",
+        "#868e96"
     ];
 }

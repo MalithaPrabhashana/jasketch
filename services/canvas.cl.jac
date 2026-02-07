@@ -38,14 +38,31 @@ def:pub drawShapeElement(ctx: any, element: dict) -> None {
 }
 
 def:pub drawFreehand(ctx: any, element: dict) -> None {
-    ctx.beginPath();
     points = element.points;
-    if points.length > 0 {
-        ctx.moveTo(points[0].x, points[0].y);
-        for i=1 to i < points.length by i+=1 {
-            ctx.lineTo(points[i].x, points[i].y);
-        }
+    if points.length == 0 {
+        return;
     }
+    ctx.beginPath();
+    if points.length == 1 {
+        ctx.arc(points[0].x, points[0].y, ctx.lineWidth / 2, 0, Math.PI * 2);
+        ctx.fill();
+        return;
+    }
+    if points.length == 2 {
+        ctx.moveTo(points[0].x, points[0].y);
+        ctx.lineTo(points[1].x, points[1].y);
+        ctx.stroke();
+        return;
+    }
+    ctx.moveTo(points[0].x, points[0].y);
+    i = 1;
+    while i < points.length - 1 {
+        midX = (points[i].x + points[i + 1].x) / 2;
+        midY = (points[i].y + points[i + 1].y) / 2;
+        ctx.quadraticCurveTo(points[i].x, points[i].y, midX, midY);
+        i = i + 1;
+    }
+    ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
     ctx.stroke();
 }
 
@@ -78,7 +95,9 @@ def:pub drawLine(ctx: any, element: dict) -> None {
 def:pub drawPreview(ctx: any, tool: str, startPoint: dict, currentPoint: dict, color: str, strokeWidth: float) -> None {
     ctx.strokeStyle = color;
     ctx.lineWidth = strokeWidth;
-    ctx.setLineDash([5, 5]);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.globalAlpha = 0.6;
 
     if tool == "rectangle" {
         w = currentPoint.x - startPoint.x;
@@ -98,73 +117,11 @@ def:pub drawPreview(ctx: any, tool: str, startPoint: dict, currentPoint: dict, c
         ctx.stroke();
     }
 
-    ctx.setLineDash([]);
+    ctx.globalAlpha = 1.0;
 }
 
 def:pub clearCanvas(ctx: any, width: float, height: float) -> None {
     ctx.clearRect(0, 0, width, height);
-}
-
-def:pub drawInfiniteGrid(ctx: any, width: float, height: float, zoom: float, panOffset: dict) -> None {
-    ctx.save();
-
-    gridSize = 40;
-
-    if zoom < 0.25 {
-        ctx.restore();
-        return;
-    }
-
-    ctx.strokeStyle = "rgba(200, 200, 200, 0.3)";
-    ctx.lineWidth = 1;
-
-    startX = Math.floor((-panOffset.x) / (gridSize * zoom)) * gridSize;
-    startY = Math.floor((-panOffset.y) / (gridSize * zoom)) * gridSize;
-    endX = Math.ceil((width - panOffset.x) / (gridSize * zoom)) * gridSize;
-    endY = Math.ceil((height - panOffset.y) / (gridSize * zoom)) * gridSize;
-
-    ctx.beginPath();
-    x = startX;
-    while x <= endX {
-        screenX = x * zoom + panOffset.x;
-        if screenX >= 0 and screenX <= width {
-            ctx.moveTo(screenX, 0);
-            ctx.lineTo(screenX, height);
-        }
-        x = x + gridSize;
-    }
-
-    y = startY;
-    while y <= endY {
-        screenY = y * zoom + panOffset.y;
-        if screenY >= 0 and screenY <= height {
-            ctx.moveTo(0, screenY);
-            ctx.lineTo(width, screenY);
-        }
-        y = y + gridSize;
-    }
-    ctx.stroke();
-
-    ctx.strokeStyle = "rgba(150, 150, 150, 0.5)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-
-    originScreenX = 0 * zoom + panOffset.x;
-    originScreenY = 0 * zoom + panOffset.y;
-
-    if originScreenX >= 0 and originScreenX <= width {
-        ctx.moveTo(originScreenX, 0);
-        ctx.lineTo(originScreenX, height);
-    }
-
-    if originScreenY >= 0 and originScreenY <= height {
-        ctx.moveTo(0, originScreenY);
-        ctx.lineTo(width, originScreenY);
-    }
-
-    ctx.stroke();
-
-    ctx.restore();
 }
 
 def:pub applyViewportTransform(ctx: any, zoom: float, panOffset: dict) -> None {

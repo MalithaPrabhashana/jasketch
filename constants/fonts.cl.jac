@@ -1,13 +1,13 @@
 def:pub FONTS() -> list {
     return [
-        {"id": "Virgil", "label": "Handwritten"},
-        {"id": "Comic Sans MS", "label": "Comic"},
+        {"id": "Inter", "label": "Sans"},
         {"id": "Georgia", "label": "Serif"},
-        {"id": "Arial", "label": "Sans-serif"},
-        {"id": "Courier New", "label": "Monospace"}
+        {"id": "Courier New", "label": "Mono"},
+        {"id": "Comic Sans MS", "label": "Comic"},
+        {"id": "Virgil", "label": "Hand"}
     ];
 }
 
 def:pub FONT_SIZES() -> list {
-    return [16, 24, 36, 48];
+    return [14, 18, 24, 32, 48, 64];
 }

@@ -1,4 +1,4 @@
-import from react { useRef, useEffect }
+import from react { useRef, useEffect, useState }
 import from "..hooks.useCanvas" { useCanvas }
 import from "..hooks.useDrawingState" { useDrawingState }
 import from "..hooks.useElements" { useElements }
@@ -27,6 +27,7 @@ def:pub Canvas(props: dict) -> any {
     canvasRef = canvasHook.canvasRef;
     containerRef = canvasHook.containerRef;
     textInputRef = useRef(None);
+    [spacePressed, setSpacePressed] = useState(False);
 
     can with [elementsHook.elements, canvasHook.canvasSize, viewportHook.zoom, viewportHook.panOffset, selectionHook.selectedElement, selectionHook.selectedElements, selectionHook.isBoxSelecting, selectionHook.boxStart, selectionHook.boxEnd] entry {
         canvas = canvasRef.current;
@@ -39,8 +40,27 @@ def:pub Canvas(props: dict) -> any {
 
     useEffect(lambda -> any {
         def handleKeyDown(e: dict) -> None {
+            if e.key == " " and not textInputHook.textInput {
+                e.preventDefault();
+                setSpacePressed(True);
+            }
             if not textInputHook.textInput and (e.key == "Delete" or e.key == "Backspace") {
-                if selectionHook.selectedElement {
+                if selectionHook.selectedElements.length > 0 {
+                    indices = [];
+                    i = 0;
+                    while i < selectionHook.selectedElements.length {
+                        indices.push(selectionHook.selectedElements[i].index);
+                        i = i + 1;
+                    }
+                    indices.sort(lambda a: int, b: int -> int { return b - a; });
+                    j = 0;
+                    while j < indices.length {
+                        elementsHook.removeElement(indices[j]);
+                        j = j + 1;
+                    }
+                    selectionHook.clearSelection();
+                    e.preventDefault();
+                } elif selectionHook.selectedElement {
                     elementsHook.removeElement(selectionHook.selectedElement.index);
                     selectionHook.clearSelection();
                     e.preventDefault();
@@ -48,11 +68,19 @@ def:pub Canvas(props: dict) -> any {
             }
         }
 
+        def handleKeyUp(e: dict) -> None {
+            if e.key == " " {
+                setSpacePressed(False);
+            }
+        }
+
         window.addEventListener("keydown", handleKeyDown);
+        window.addEventListener("keyup", handleKeyUp);
         return lambda -> None {
             window.removeEventListener("keydown", handleKeyDown);
+            window.removeEventListener("keyup", handleKeyUp);
         };
-    }, [selectionHook.selectedElement, textInputHook.textInput]);
+    }, [selectionHook.selectedElement, selectionHook.selectedElements, textInputHook.textInput]);
 
     useEffect(lambda -> any {
         canvas = canvasRef.current;
@@ -132,8 +160,14 @@ def:pub Canvas(props: dict) -> any {
     def handleMouseDown(e: dict) -> None {
         pos = getMousePosition(e, canvasRef.current, viewportHook.panOffset, viewportHook.zoom);
 
+        if spacePressed or e.button == 1 {
+            viewportHook.startPanning();
+            e.preventDefault();
+            return;
+        }
+
         if currentTool == "select" {
-            if e.button == 1 or e.button == 2 or e.metaKey or e.ctrlKey {
+            if e.button == 2 or e.metaKey or e.ctrlKey {
                 viewportHook.startPanning();
                 e.preventDefault();
                 return;
@@ -258,7 +292,6 @@ def:pub Canvas(props: dict) -> any {
 
             canvas = canvasRef.current;
             ctx = canvas.getContext("2d");
-            canvasHook.redrawCanvas(elementsHook.elements, viewportHook.zoom, viewportHook.panOffset, selectionHook.selectedElement, selectionHook.selectedElements, selectionHook.isBoxSelecting, selectionHook.boxStart, selectionHook.boxEnd);
 
             ctx.save();
             ctx.translate(viewportHook.panOffset.x, viewportHook.panOffset.y);
@@ -270,9 +303,17 @@ def:pub Canvas(props: dict) -> any {
             ctx.lineJoin = "round";
             ctx.beginPath();
 
-            if drawingState.currentPath.length > 0 {
-                lastPoint = drawingState.currentPath[drawingState.currentPath.length - 1];
-                ctx.moveTo(lastPoint.x, lastPoint.y);
+            pathLen = drawingState.currentPath.length;
+            if pathLen >= 2 {
+                prev = drawingState.currentPath[pathLen - 2];
+                last = drawingState.currentPath[pathLen - 1];
+                midX = (last.x + pos.x) / 2;
+                midY = (last.y + pos.y) / 2;
+                ctx.moveTo(last.x, last.y);
+                ctx.quadraticCurveTo(last.x, last.y, midX, midY);
+                ctx.stroke();
+            } elif pathLen == 1 {
+                ctx.moveTo(drawingState.currentPath[0].x, drawingState.currentPath[0].y);
                 ctx.lineTo(pos.x, pos.y);
                 ctx.stroke();
             }
@@ -369,14 +410,20 @@ def:pub Canvas(props: dict) -> any {
     }
 
     cursorClass = "cursor-crosshair";
-    if currentTool == "text" {
+    if spacePressed or viewportHook.isPanning {
+        cursorClass = "cursor-grab";
+    } elif currentTool == "text" {
         cursorClass = "cursor-text";
     } elif currentTool == "select" {
-        cursorClass = "cursor-default";
+        if selectionHook.isDragging {
+            cursorClass = "cursor-grabbing";
+        } else {
+            cursorClass = "cursor-default";
+        }
     }
 
     return (
-        <div ref={containerRef} className="relative w-full h-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+        <div ref={containerRef} className="relative w-full h-full flex items-center justify-center overflow-hidden bg-white">
             <CanvasRenderer
                 canvasRef={canvasRef}
                 canvasSize={canvasHook.canvasSize}
