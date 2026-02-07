@@ -87,6 +87,31 @@ def:pub isPointInFreehandPath(point: dict, path: list, tolerance: float) -> bool
     return False;
 }
 
+def:pub getResizeHandleAtPoint(point: dict, bounds: dict) -> str {
+    handleRadius = 8;
+    handleIds = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+    handlePositions = [
+        {"x": bounds.x, "y": bounds.y},
+        {"x": bounds.x + bounds.width / 2, "y": bounds.y},
+        {"x": bounds.x + bounds.width, "y": bounds.y},
+        {"x": bounds.x + bounds.width, "y": bounds.y + bounds.height / 2},
+        {"x": bounds.x + bounds.width, "y": bounds.y + bounds.height},
+        {"x": bounds.x + bounds.width / 2, "y": bounds.y + bounds.height},
+        {"x": bounds.x, "y": bounds.y + bounds.height},
+        {"x": bounds.x, "y": bounds.y + bounds.height / 2}
+    ];
+
+    i = 0;
+    while i < handlePositions.length {
+        dist = calculateDistance(point, handlePositions[i]);
+        if dist <= handleRadius {
+            return handleIds[i];
+        }
+        i = i + 1;
+    }
+    return None;
+}
+
 def:pub isPointInElement(point: dict, element: dict) -> bool {
     if element.type == "text" {
         return isPointInText(point, element);
@@ -94,7 +119,7 @@ def:pub isPointInElement(point: dict, element: dict) -> bool {
         return isPointInRectangle(point, element);
     } elif element.type == "circle" {
         return isPointInCircle(point, element);
-    } elif element.type == "line" {
+    } elif element.type == "line" or element.type == "arrow" {
         return isPointNearLine(point, element, 20.0);
     } elif element.type == "freehand" {
         return isPointInFreehandPath(point, element.points, 15.0);

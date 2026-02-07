@@ -30,6 +30,19 @@ def:pub useElements() -> dict {
         setElements(newElements);
     }
 
+    def removeMultipleElements(indices: list) -> None {
+        indexSet = {};
+        i = 0;
+        while i < indices.length {
+            indexSet[indices[i]] = True;
+            i = i + 1;
+        }
+        newElements = elements.filter(lambda _: any, i: any -> bool {
+            return not indexSet[i];
+        });
+        setElements(newElements);
+    }
+
     def clearElements() -> None {
         setElements([]);
     }
@@ -41,6 +54,7 @@ def:pub useElements() -> dict {
         "updateElement": updateElement,
         "updateMultipleElements": updateMultipleElements,
         "removeElement": removeElement,
+        "removeMultipleElements": removeMultipleElements,
         "clearElements": clearElements
     };
 }

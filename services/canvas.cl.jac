@@ -1,4 +1,4 @@
-import from .geometry { calculateCircleRadius }
+import from .geometry { calculateCircleRadius, getConnectionPoints }
 
 def:pub drawElement(ctx: any, element: dict) -> None {
     if element.type == "text" {
@@ -13,10 +13,21 @@ def:pub drawTextElement(ctx: any, element: dict) -> None {
     ctx.fillStyle = element.color;
     ctx.textBaseline = "top";
 
+    # Subtle text shadow
+    ctx.shadowColor = "rgba(0, 0, 0, 0.06)";
+    ctx.shadowBlur = 2;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 1;
+
     lines = element.text.split("\n");
     lines.forEach(lambda line: any, index: any -> None {
         ctx.fillText(line, element.x, element.y + (index * element.fontSize * 1.2));
     });
+
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
 }
 
 def:pub drawShapeElement(ctx: any, element: dict) -> None {
@@ -26,6 +37,12 @@ def:pub drawShapeElement(ctx: any, element: dict) -> None {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
+    # Subtle shadow for modern look
+    ctx.shadowColor = "rgba(0, 0, 0, 0.08)";
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 2;
+
     if element.type == "freehand" {
         drawFreehand(ctx, element);
     } elif element.type == "rectangle" {
@@ -34,7 +51,15 @@ def:pub drawShapeElement(ctx: any, element: dict) -> None {
         drawCircle(ctx, element);
     } elif element.type == "line" {
         drawLine(ctx, element);
+    } elif element.type == "arrow" {
+        drawArrow(ctx, element);
     }
+
+    # Reset shadow
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
 }
 
 def:pub drawFreehand(ctx: any, element: dict) -> None {
@@ -68,7 +93,7 @@ def:pub drawFreehand(ctx: any, element: dict) -> None {
 
 def:pub drawRectangle(ctx: any, element: dict) -> None {
     ctx.beginPath();
-    ctx.rect(element.x, element.y, element.width, element.height);
+    ctx.roundRect(element.x, element.y, element.width, element.height, 8);
     ctx.stroke();
     if element.fillColor and element.fillColor != "transparent" {
         ctx.fill();
@@ -92,6 +117,24 @@ def:pub drawLine(ctx: any, element: dict) -> None {
     ctx.stroke();
 }
 
+def:pub drawArrow(ctx: any, element: dict) -> None {
+    ctx.beginPath();
+    ctx.moveTo(element.x1, element.y1);
+    ctx.lineTo(element.x2, element.y2);
+    ctx.stroke();
+
+    # Draw arrowhead
+    headLen = 12;
+    angle = Math.atan2(element.y2 - element.y1, element.x2 - element.x1);
+    ctx.beginPath();
+    ctx.moveTo(element.x2, element.y2);
+    ctx.lineTo(element.x2 - headLen * Math.cos(angle - Math.PI / 6), element.y2 - headLen * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(element.x2 - headLen * Math.cos(angle + Math.PI / 6), element.y2 - headLen * Math.sin(angle + Math.PI / 6));
+    ctx.closePath();
+    ctx.fillStyle = element.color;
+    ctx.fill();
+}
+
 def:pub drawPreview(ctx: any, tool: str, startPoint: dict, currentPoint: dict, color: str, strokeWidth: float) -> None {
     ctx.strokeStyle = color;
     ctx.lineWidth = strokeWidth;
@@ -102,7 +145,9 @@ def:pub drawPreview(ctx: any, tool: str, startPoint: dict, currentPoint: dict, c
     if tool == "rectangle" {
         w = currentPoint.x - startPoint.x;
         h = currentPoint.y - startPoint.y;
-        ctx.strokeRect(startPoint.x, startPoint.y, w, h);
+        ctx.beginPath();
+        ctx.roundRect(startPoint.x, startPoint.y, w, h, 8);
+        ctx.stroke();
     } elif tool == "circle" {
         w = currentPoint.x - startPoint.x;
         h = currentPoint.y - startPoint.y;
@@ -115,6 +160,21 @@ def:pub drawPreview(ctx: any, tool: str, startPoint: dict, currentPoint: dict, c
         ctx.moveTo(startPoint.x, startPoint.y);
         ctx.lineTo(currentPoint.x, currentPoint.y);
         ctx.stroke();
+    } elif tool == "arrow" {
+        ctx.beginPath();
+        ctx.moveTo(startPoint.x, startPoint.y);
+        ctx.lineTo(currentPoint.x, currentPoint.y);
+        ctx.stroke();
+        # Preview arrowhead
+        headLen = 12;
+        angle = Math.atan2(currentPoint.y - startPoint.y, currentPoint.x - startPoint.x);
+        ctx.beginPath();
+        ctx.moveTo(currentPoint.x, currentPoint.y);
+        ctx.lineTo(currentPoint.x - headLen * Math.cos(angle - Math.PI / 6), currentPoint.y - headLen * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(currentPoint.x - headLen * Math.cos(angle + Math.PI / 6), currentPoint.y - headLen * Math.sin(angle + Math.PI / 6));
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
     }
 
     ctx.globalAlpha = 1.0;
@@ -148,50 +208,37 @@ def:pub drawBoxSelectionRect(ctx: any, boxStart: dict, boxEnd: dict) -> None {
     ctx.restore();
 }
 
-def:pub drawSelectionBox(ctx: any, element: dict) -> None {
-    ctx.save();
-    ctx.strokeStyle = "#6366f1";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([5, 5]);
-
+def:pub getElementBounds(ctx: any, element: dict) -> dict {
     padding = 5;
-
     if element.type == "text" {
         ctx.font = element.fontSize + "px " + element.fontFamily;
         metrics = ctx.measureText(element.text);
         lines = element.text.split("\n");
         textHeight = lines.length * element.fontSize * 1.2;
-        ctx.strokeRect(
-            element.x - padding,
-            element.y - padding,
-            metrics.width + padding * 2,
-            textHeight + padding * 2
-        );
-    } elif element.type == "rectangle" {
-        ctx.strokeRect(
-            element.x - padding,
-            element.y - padding,
-            element.width + padding * 2,
-            element.height + padding * 2
-        );
-    } elif element.type == "circle" {
-        ctx.strokeRect(
-            element.x - padding,
-            element.y - padding,
-            element.width + padding * 2,
-            element.height + padding * 2
-        );
-    } elif element.type == "line" {
+        return {
+            "x": element.x - padding,
+            "y": element.y - padding,
+            "width": metrics.width + padding * 2,
+            "height": textHeight + padding * 2
+        };
+    } elif element.type == "rectangle" or element.type == "circle" {
+        return {
+            "x": element.x - padding,
+            "y": element.y - padding,
+            "width": element.width + padding * 2,
+            "height": element.height + padding * 2
+        };
+    } elif element.type == "line" or element.type == "arrow" {
         minX = Math.min(element.x1, element.x2);
         minY = Math.min(element.y1, element.y2);
         maxX = Math.max(element.x1, element.x2);
         maxY = Math.max(element.y1, element.y2);
-        ctx.strokeRect(
-            minX - padding,
-            minY - padding,
-            (maxX - minX) + padding * 2,
-            (maxY - minY) + padding * 2
-        );
+        return {
+            "x": minX - padding,
+            "y": minY - padding,
+            "width": (maxX - minX) + padding * 2,
+            "height": (maxY - minY) + padding * 2
+        };
     } elif element.type == "freehand" {
         if element.points.length > 0 {
             minX = element.points[0].x;
@@ -214,15 +261,86 @@ def:pub drawSelectionBox(ctx: any, element: dict) -> None {
                 }
             });
 
-            ctx.strokeRect(
-                minX - padding,
-                minY - padding,
-                (maxX - minX) + padding * 2,
-                (maxY - minY) + padding * 2
-            );
+            return {
+                "x": minX - padding,
+                "y": minY - padding,
+                "width": (maxX - minX) + padding * 2,
+                "height": (maxY - minY) + padding * 2
+            };
         }
     }
+    return {"x": 0, "y": 0, "width": 0, "height": 0};
+}
 
+def:pub drawSelectionBox(ctx: any, element: dict) -> None {
+    ctx.save();
+    bounds = getElementBounds(ctx, element);
+
+    # Solid selection border
+    ctx.strokeStyle = "#6366f1";
+    ctx.lineWidth = 1.5;
     ctx.setLineDash([]);
+    ctx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
+
+    # Draw resize handles at corners and edges
+    handleSize = 6;
+    ctx.fillStyle = "#ffffff";
+    ctx.strokeStyle = "#6366f1";
+    ctx.lineWidth = 1.5;
+
+    handlePositions = [
+        {"x": bounds.x, "y": bounds.y},
+        {"x": bounds.x + bounds.width / 2, "y": bounds.y},
+        {"x": bounds.x + bounds.width, "y": bounds.y},
+        {"x": bounds.x + bounds.width, "y": bounds.y + bounds.height / 2},
+        {"x": bounds.x + bounds.width, "y": bounds.y + bounds.height},
+        {"x": bounds.x + bounds.width / 2, "y": bounds.y + bounds.height},
+        {"x": bounds.x, "y": bounds.y + bounds.height},
+        {"x": bounds.x, "y": bounds.y + bounds.height / 2}
+    ];
+
+    i = 0;
+    while i < handlePositions.length {
+        hp = handlePositions[i];
+        ctx.beginPath();
+        ctx.arc(hp.x, hp.y, handleSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        i = i + 1;
+    }
+
+    ctx.restore();
+}
+
+def:pub drawConnectionPoints(ctx: any, element: dict) -> None {
+    points = getConnectionPoints(element);
+    if points.length == 0 {
+        return;
+    }
+    ctx.save();
+    i = 0;
+    while i < points.length {
+        cp = points[i];
+        ctx.beginPath();
+        ctx.arc(cp.x, cp.y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(99, 102, 241, 0.3)";
+        ctx.fill();
+        ctx.strokeStyle = "#6366f1";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        i = i + 1;
+    }
+    ctx.restore();
+}
+
+def:pub drawSnapIndicator(ctx: any, point: dict) -> None {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 7, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(99, 102, 241, 0.5)";
+    ctx.fill();
+    ctx.strokeStyle = "#6366f1";
+    ctx.lineWidth = 2;
+    ctx.stroke();
     ctx.restore();
 }

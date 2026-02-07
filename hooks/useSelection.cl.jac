@@ -10,6 +10,9 @@ def:pub useSelection() -> dict {
     [isBoxSelecting, setIsBoxSelecting] = useState(False);
     [boxStart, setBoxStart] = useState(None);
     [boxEnd, setBoxEnd] = useState(None);
+    [isResizing, setIsResizing] = useState(False);
+    [resizeHandle, setResizeHandle] = useState(None);
+    [resizeStartElement, setResizeStartElement] = useState(None);
 
     def findElementAtPoint(point: dict, elements: list) -> dict {
         i = elements.length - 1;
@@ -35,7 +38,7 @@ def:pub useSelection() -> dict {
         if element.type == "freehand" and element.points and element.points.length > 0 {
             elementX = element.points[0].x;
             elementY = element.points[0].y;
-        } elif element.type == "line" {
+        } elif element.type == "line" or element.type == "arrow" {
             elementX = element.x1;
             elementY = element.y1;
         } else {
@@ -53,10 +56,17 @@ def:pub useSelection() -> dict {
         setIsDragging(False);
     }
 
+    def stopResizing() -> None {
+        setIsResizing(False);
+        setResizeHandle(None);
+        setResizeStartElement(None);
+    }
+
     def clearSelection() -> None {
         setSelectedElement(None);
         setSelectedElements([]);
         setIsDragging(False);
+        stopResizing();
     }
 
     def startBoxSelection(point: dict) -> None {
@@ -106,7 +116,7 @@ def:pub useSelection() -> dict {
             elemX = element.x;
             elemY = element.y;
             return elemX >= minX and elemX <= maxX and elemY >= minY and elemY <= maxY;
-        } elif element.type == "line" {
+        } elif element.type == "line" or element.type == "arrow" {
             x1InBox = element.x1 >= minX and element.x1 <= maxX and element.y1 >= minY and element.y1 <= maxY;
             x2InBox = element.x2 >= minX and element.x2 <= maxX and element.y2 >= minY and element.y2 <= maxY;
             return x1InBox or x2InBox;
@@ -133,13 +143,20 @@ def:pub useSelection() -> dict {
         "isBoxSelecting": isBoxSelecting,
         "boxStart": boxStart,
         "boxEnd": boxEnd,
+        "isResizing": isResizing,
+        "resizeHandle": resizeHandle,
+        "resizeStartElement": resizeStartElement,
         "setSelectedElement": setSelectedElement,
         "setSelectedElements": setSelectedElements,
         "setIsDragging": setIsDragging,
         "setDragStartPos": setDragStartPos,
+        "setIsResizing": setIsResizing,
+        "setResizeHandle": setResizeHandle,
+        "setResizeStartElement": setResizeStartElement,
         "findElementAtPoint": findElementAtPoint,
         "startDragging": startDragging,
         "stopDragging": stopDragging,
+        "stopResizing": stopResizing,
         "clearSelection": clearSelection,
         "startBoxSelection": startBoxSelection,
         "updateBoxSelection": updateBoxSelection,

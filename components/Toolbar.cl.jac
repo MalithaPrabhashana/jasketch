@@ -1,6 +1,5 @@
 import from "..constants.colors" { PRESET_COLORS }
 import from "..constants.fonts" { FONTS, FONT_SIZES }
-import from "..constants.canvas" { STROKE_WIDTHS }
 
 def:pub ToolIcon(props: dict) -> any {
     toolId = props.toolId;
@@ -20,6 +19,11 @@ def:pub ToolIcon(props: dict) -> any {
     } elif toolId == "line" {
         return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round">
             <line x1="5" y1="19" x2="19" y2="5" />
+        </svg>;
+    } elif toolId == "arrow" {
+        return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="5" y1="19" x2="19" y2="5" />
+            <polyline points="10 5 19 5 19 14" />
         </svg>;
     } elif toolId == "rectangle" {
         return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -53,15 +57,15 @@ def:pub Toolbar(props: dict) -> any {
     onFontFamilyChange = props.onFontFamilyChange;
 
     presetColors = PRESET_COLORS();
-    strokeWidths = STROKE_WIDTHS();
     fontSizes = FONT_SIZES();
     fonts = FONTS();
 
-    toolIds = ["select", "freehand", "line", "rectangle", "circle", "text"];
+    toolIds = ["select", "freehand", "line", "arrow", "rectangle", "circle", "text"];
     toolLabels = {
         "select": "Select",
         "freehand": "Pencil",
         "line": "Line",
+        "arrow": "Arrow",
         "rectangle": "Rectangle",
         "circle": "Circle",
         "text": "Text"
@@ -115,22 +119,21 @@ def:pub Toolbar(props: dict) -> any {
             <div className="w-6 h-px bg-gray-200"></div>
 
             # Stroke Width Section
-            <div className="flex flex-col items-center gap-1">
-                {strokeWidths.map(lambda size: any -> any {
-                    isActive = currentStrokeWidth == size;
-                    lineHeight = Math.max(1, Math.round(size * 0.8));
-                    return <button
-                        key={size}
-                        onClick={lambda -> None { onStrokeWidthChange(size); }}
-                        title={"Stroke: " + String(size) + "px"}
-                        className={"w-9 h-6 rounded-md flex items-center justify-center transition-all duration-150 " + (isActive and "bg-violet-100" or "hover:bg-gray-100")}
-                    >
-                        <div
-                            className="rounded-full"
-                            style={{"width": "20px", "height": String(lineHeight) + "px", "backgroundColor": isActive and "#7c3aed" or "#9ca3af"}}
-                        />
-                    </button>;
-                })}
+            <div className="flex flex-col items-center gap-1.5">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{currentStrokeWidth + "px"}</span>
+                <div className="flex flex-col items-center" style={{"height": "80px"}}>
+                    <input
+                        type="range"
+                        min="1"
+                        max="20"
+                        step="1"
+                        value={currentStrokeWidth}
+                        onChange={lambda e: any -> None { onStrokeWidthChange(parseInt(e.target.value)); }}
+                        title={"Stroke: " + String(currentStrokeWidth) + "px"}
+                        className="stroke-slider"
+                        style={{"writingMode": "vertical-lr", "direction": "rtl", "width": "20px", "height": "72px", "accentColor": "#7c3aed"}}
+                    />
+                </div>
             </div>
         </div>
 

@@ -28,3 +28,63 @@ def:pub getTextDimensions(text: str, fontSize: float) -> dict {
     };
 }
 
+def:pub getConnectionPoints(element: dict) -> list {
+    if element.type == "rectangle" {
+        cx = element.x + element.width / 2;
+        cy = element.y + element.height / 2;
+        return [
+            {"x": cx, "y": element.y, "side": "top"},
+            {"x": element.x + element.width, "y": cy, "side": "right"},
+            {"x": cx, "y": element.y + element.height, "side": "bottom"},
+            {"x": element.x, "y": cy, "side": "left"}
+        ];
+    } elif element.type == "circle" {
+        cx = element.x + element.width / 2;
+        cy = element.y + element.height / 2;
+        radius = calculateCircleRadius(element.width, element.height);
+        return [
+            {"x": cx, "y": cy - radius, "side": "top"},
+            {"x": cx + radius, "y": cy, "side": "right"},
+            {"x": cx, "y": cy + radius, "side": "bottom"},
+            {"x": cx - radius, "y": cy, "side": "left"}
+        ];
+    } elif element.type == "text" {
+        dims = getTextDimensions(element.text, element.fontSize);
+        cx = element.x + dims.width / 2;
+        cy = element.y + dims.height / 2;
+        return [
+            {"x": cx, "y": element.y, "side": "top"},
+            {"x": element.x + dims.width, "y": cy, "side": "right"},
+            {"x": cx, "y": element.y + dims.height, "side": "bottom"},
+            {"x": element.x, "y": cy, "side": "left"}
+        ];
+    }
+    return [];
+}
+
+def:pub findNearestConnectionPoint(mousePos: dict, elements: list, threshold: float) -> dict {
+    nearest = None;
+    nearestDist = threshold;
+
+    i = 0;
+    while i < elements.length {
+        element = elements[i];
+        connPoints = getConnectionPoints(element);
+        j = 0;
+        while j < connPoints.length {
+            dist = calculateDistance(mousePos, connPoints[j]);
+            if dist < nearestDist {
+                nearestDist = dist;
+                nearest = {
+                    "point": connPoints[j],
+                    "elementIndex": i,
+                    "side": connPoints[j].side
+                };
+            }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    return nearest;
+}
+

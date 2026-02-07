@@ -5,8 +5,9 @@ import from "..hooks.useElements" { useElements }
 import from "..hooks.useSelection" { useSelection }
 import from "..hooks.useViewport" { useViewport }
 import from "..hooks.useTextInput" { useTextInput }
-import from "..services.geometry" { getMousePosition }
-import from "..services.canvas" { drawPreview }
+import from "..services.geometry" { getMousePosition, findNearestConnectionPoint }
+import from "..services.canvas" { drawPreview, getElementBounds, drawConnectionPoints, drawSnapIndicator }
+import from "..services.collision" { getResizeHandleAtPoint }
 import from .canvas.CanvasRenderer { CanvasRenderer }
 import from .canvas.TextInput { TextInput }
 
@@ -44,6 +45,16 @@ def:pub Canvas(props: dict) -> any {
                 e.preventDefault();
                 setSpacePressed(True);
             }
+            if not textInputHook.textInput and (e.key == "a" or e.key == "A") and (e.ctrlKey or e.metaKey) {
+                e.preventDefault();
+                allElements = [];
+                idx = 0;
+                while idx < elementsHook.elements.length {
+                    allElements.push({"element": elementsHook.elements[idx], "index": idx});
+                    idx = idx + 1;
+                }
+                selectionHook.setSelectedElements(allElements);
+            }
             if not textInputHook.textInput and (e.key == "Delete" or e.key == "Backspace") {
                 if selectionHook.selectedElements.length > 0 {
                     indices = [];
@@ -52,12 +63,7 @@ def:pub Canvas(props: dict) -> any {
                         indices.push(selectionHook.selectedElements[i].index);
                         i = i + 1;
                     }
-                    indices.sort(lambda a: int, b: int -> int { return b - a; });
-                    j = 0;
-                    while j < indices.length {
-                        elementsHook.removeElement(indices[j]);
-                        j = j + 1;
-                    }
+                    elementsHook.removeMultipleElements(indices);
                     selectionHook.clearSelection();
                     e.preventDefault();
                 } elif selectionHook.selectedElement {
@@ -80,7 +86,7 @@ def:pub Canvas(props: dict) -> any {
             window.removeEventListener("keydown", handleKeyDown);
             window.removeEventListener("keyup", handleKeyUp);
         };
-    }, [selectionHook.selectedElement, selectionHook.selectedElements, textInputHook.textInput]);
+    }, [selectionHook.selectedElement, selectionHook.selectedElements, textInputHook.textInput, elementsHook.elements]);
 
     useEffect(lambda -> any {
         canvas = canvasRef.current;
@@ -173,6 +179,23 @@ def:pub Canvas(props: dict) -> any {
                 return;
             }
 
+            # Check if clicking on a resize handle of selected element
+            if selectionHook.selectedElement and selectionHook.selectedElement.element {
+                canvas = canvasRef.current;
+                if canvas {
+                    ctx = canvas.getContext("2d");
+                    bounds = getElementBounds(ctx, selectionHook.selectedElement.element);
+                    handle = getResizeHandleAtPoint(pos, bounds);
+                    if handle {
+                        selectionHook.setIsResizing(True);
+                        selectionHook.setResizeHandle(handle);
+                        selectionHook.setResizeStartElement(Object.assign({}, selectionHook.selectedElement.element));
+                        selectionHook.setDragStartPos(pos);
+                        return;
+                    }
+                }
+            }
+
             elementInfo = selectionHook.findElementAtPoint(pos, elementsHook.elements);
             if elementInfo {
                 isInSelection = False;
@@ -204,7 +227,18 @@ def:pub Canvas(props: dict) -> any {
         }
 
         drawingState.setIsDrawing(True);
-        drawingState.setStartPoint(pos);
+
+        # Snap start point to connection point for line/arrow tools
+        if currentTool == "line" or currentTool == "arrow" {
+            snap = findNearestConnectionPoint(pos, elementsHook.elements, 20.0);
+            if snap {
+                drawingState.setStartPoint(snap.point);
+            } else {
+                drawingState.setStartPoint(pos);
+            }
+        } else {
+            drawingState.setStartPoint(pos);
+        }
 
         if currentTool == "freehand" {
             drawingState.setCurrentPath([pos]);
@@ -224,6 +258,109 @@ def:pub Canvas(props: dict) -> any {
             return;
         }
 
+        if selectionHook.isResizing and currentTool == "select" and selectionHook.resizeStartElement and selectionHook.dragStartPos {
+            origEl = selectionHook.resizeStartElement;
+            handle = selectionHook.resizeHandle;
+            deltaX = pos.x - selectionHook.dragStartPos.x;
+            deltaY = pos.y - selectionHook.dragStartPos.y;
+            newElement = Object.assign({}, origEl);
+
+            if origEl.type == "rectangle" or origEl.type == "circle" {
+                if handle == "se" {
+                    newElement.width = origEl.width + deltaX;
+                    newElement.height = origEl.height + deltaY;
+                } elif handle == "sw" {
+                    newElement.x = origEl.x + deltaX;
+                    newElement.width = origEl.width - deltaX;
+                    newElement.height = origEl.height + deltaY;
+                } elif handle == "ne" {
+                    newElement.y = origEl.y + deltaY;
+                    newElement.width = origEl.width + deltaX;
+                    newElement.height = origEl.height - deltaY;
+                } elif handle == "nw" {
+                    newElement.x = origEl.x + deltaX;
+                    newElement.y = origEl.y + deltaY;
+                    newElement.width = origEl.width - deltaX;
+                    newElement.height = origEl.height - deltaY;
+                } elif handle == "n" {
+                    newElement.y = origEl.y + deltaY;
+                    newElement.height = origEl.height - deltaY;
+                } elif handle == "s" {
+                    newElement.height = origEl.height + deltaY;
+                } elif handle == "e" {
+                    newElement.width = origEl.width + deltaX;
+                } elif handle == "w" {
+                    newElement.x = origEl.x + deltaX;
+                    newElement.width = origEl.width - deltaX;
+                }
+            } elif origEl.type == "line" or origEl.type == "arrow" {
+                if handle == "nw" or handle == "w" or handle == "sw" {
+                    newElement.x1 = origEl.x1 + deltaX;
+                    newElement.y1 = origEl.y1 + deltaY;
+                } elif handle == "ne" or handle == "e" or handle == "se" {
+                    newElement.x2 = origEl.x2 + deltaX;
+                    newElement.y2 = origEl.y2 + deltaY;
+                } elif handle == "n" {
+                    newElement.y1 = origEl.y1 + deltaY;
+                    newElement.y2 = origEl.y2 + deltaY;
+                } elif handle == "s" {
+                    newElement.y1 = origEl.y1 + deltaY;
+                    newElement.y2 = origEl.y2 + deltaY;
+                }
+            } elif origEl.type == "text" {
+                # Scale font size proportionally
+                if handle == "se" or handle == "s" or handle == "sw" or handle == "ne" or handle == "n" or handle == "nw" {
+                    scaleFactor = 1 + deltaY / 100;
+                    if scaleFactor < 0.3 {
+                        scaleFactor = 0.3;
+                    }
+                    if scaleFactor > 5 {
+                        scaleFactor = 5;
+                    }
+                    newElement.fontSize = Math.round(origEl.fontSize * scaleFactor);
+                    if newElement.fontSize < 8 {
+                        newElement.fontSize = 8;
+                    }
+                    if newElement.fontSize > 200 {
+                        newElement.fontSize = 200;
+                    }
+                }
+            } elif origEl.type == "freehand" {
+                # Scale all points relative to bounding box
+                if origEl.points.length > 0 {
+                    minX = origEl.points[0].x;
+                    minY = origEl.points[0].y;
+                    maxX = origEl.points[0].x;
+                    maxY = origEl.points[0].y;
+                    pi = 0;
+                    while pi < origEl.points.length {
+                        if origEl.points[pi].x < minX { minX = origEl.points[pi].x; }
+                        if origEl.points[pi].x > maxX { maxX = origEl.points[pi].x; }
+                        if origEl.points[pi].y < minY { minY = origEl.points[pi].y; }
+                        if origEl.points[pi].y > maxY { maxY = origEl.points[pi].y; }
+                        pi = pi + 1;
+                    }
+                    bw = maxX - minX;
+                    bh = maxY - minY;
+                    if bw > 0 and bh > 0 {
+                        scaleX = (bw + deltaX) / bw;
+                        scaleY = (bh + deltaY) / bh;
+                        if scaleX < 0.1 { scaleX = 0.1; }
+                        if scaleY < 0.1 { scaleY = 0.1; }
+                        newElement.points = origEl.points.map(lambda point: dict -> dict {
+                            return {
+                                "x": minX + (point.x - minX) * scaleX,
+                                "y": minY + (point.y - minY) * scaleY
+                            };
+                        });
+                    }
+                }
+            }
+
+            elementsHook.updateElement(selectionHook.selectedElement.index, newElement);
+            return;
+        }
+
         if selectionHook.isDragging and currentTool == "select" {
             if selectionHook.selectedElements.length > 1 and selectionHook.dragStartPos {
                 deltaX = pos.x - selectionHook.dragStartPos.x;
@@ -239,7 +376,7 @@ def:pub Canvas(props: dict) -> any {
                     if originalElement.type == "text" or originalElement.type == "rectangle" or originalElement.type == "circle" {
                         newElement.x = originalElement.x + deltaX;
                         newElement.y = originalElement.y + deltaY;
-                    } elif originalElement.type == "line" {
+                    } elif originalElement.type == "line" or originalElement.type == "arrow" {
                         newElement.x1 = originalElement.x1 + deltaX;
                         newElement.y1 = originalElement.y1 + deltaY;
                         newElement.x2 = originalElement.x2 + deltaX;
@@ -262,7 +399,7 @@ def:pub Canvas(props: dict) -> any {
                 if element.type == "text" or element.type == "rectangle" or element.type == "circle" {
                     newElement.x = pos.x - selectionHook.dragOffset.x;
                     newElement.y = pos.y - selectionHook.dragOffset.y;
-                } elif element.type == "line" {
+                } elif element.type == "line" or element.type == "arrow" {
                     deltaX = pos.x - selectionHook.dragOffset.x - element.x1;
                     deltaY = pos.y - selectionHook.dragOffset.y - element.y1;
                     newElement.x1 = element.x1 + deltaX;
@@ -327,12 +464,39 @@ def:pub Canvas(props: dict) -> any {
             ctx.save();
             ctx.translate(viewportHook.panOffset.x, viewportHook.panOffset.y);
             ctx.scale(viewportHook.zoom, viewportHook.zoom);
-            drawPreview(ctx, currentTool, drawingState.startPoint, pos, currentColor, currentStrokeWidth);
+
+            # For line/arrow, show connection points and snap endpoint
+            previewEnd = pos;
+            if currentTool == "line" or currentTool == "arrow" {
+                # Draw connection points on all shapes
+                ei = 0;
+                while ei < elementsHook.elements.length {
+                    el = elementsHook.elements[ei];
+                    if el.type == "rectangle" or el.type == "circle" or el.type == "text" {
+                        drawConnectionPoints(ctx, el);
+                    }
+                    ei = ei + 1;
+                }
+
+                # Snap end point
+                snap = findNearestConnectionPoint(pos, elementsHook.elements, 20.0);
+                if snap {
+                    previewEnd = snap.point;
+                    drawSnapIndicator(ctx, snap.point);
+                }
+            }
+
+            drawPreview(ctx, currentTool, drawingState.startPoint, previewEnd, currentColor, currentStrokeWidth);
             ctx.restore();
         }
     }
 
     def handleMouseUp(e: dict) -> None {
+        if selectionHook.isResizing {
+            selectionHook.stopResizing();
+            return;
+        }
+
         if selectionHook.isBoxSelecting and currentTool == "select" {
             selectionHook.finishBoxSelection(elementsHook.elements);
             return;
@@ -386,13 +550,19 @@ def:pub Canvas(props: dict) -> any {
                 "strokeWidth": currentStrokeWidth,
                 "fillColor": "transparent"
             };
-        } elif currentTool == "line" {
+        } elif currentTool == "line" or currentTool == "arrow" {
+            # Snap endpoint to connection point
+            endPos = pos;
+            snap = findNearestConnectionPoint(pos, elementsHook.elements, 20.0);
+            if snap {
+                endPos = snap.point;
+            }
             newElement = {
-                "type": "line",
+                "type": currentTool,
                 "x1": drawingState.startPoint.x,
                 "y1": drawingState.startPoint.y,
-                "x2": pos.x,
-                "y2": pos.y,
+                "x2": endPos.x,
+                "y2": endPos.y,
                 "color": currentColor,
                 "strokeWidth": currentStrokeWidth
             };
@@ -406,6 +576,7 @@ def:pub Canvas(props: dict) -> any {
     def handleMouseLeave() -> None {
         drawingState.setIsDrawing(False);
         selectionHook.stopDragging();
+        selectionHook.stopResizing();
         viewportHook.stopPanning();
     }
 
@@ -415,7 +586,9 @@ def:pub Canvas(props: dict) -> any {
     } elif currentTool == "text" {
         cursorClass = "cursor-text";
     } elif currentTool == "select" {
-        if selectionHook.isDragging {
+        if selectionHook.isResizing {
+            cursorClass = "cursor-grabbing";
+        } elif selectionHook.isDragging {
             cursorClass = "cursor-grabbing";
         } else {
             cursorClass = "cursor-default";
